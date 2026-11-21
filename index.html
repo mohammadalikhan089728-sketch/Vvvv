@@ -3,20 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Subway Runner — Michelle</title>
+  <title>Subway Runner — Open Source Character</title>
   <style>
     body { margin: 0; overflow: hidden; background: #0b1120; font-family: system-ui, sans-serif; touch-action: none; }
     #hud { position: absolute; top: 16px; left: 16px; right: 16px; display: flex; justify-content: space-between; color: #fff; font-size: 20px; font-weight: 600; text-shadow: 0 2px 8px rgba(0,0,0,0.6); pointer-events: none; z-index: 10; }
     #game-over { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); color: #fff; z-index: 20; text-align: center; gap: 12px; padding: 24px; }
     #game-over h1 { margin: 0; font-size: 42px; letter-spacing: 2px; }
-    #game-over p { margin: 0; font-size: 20px; opacity: 0.8; }
     #game-over button { margin-top: 12px; padding: 12px 32px; border-radius: 999px; border: none; background: #38bdf8; color: #0b1120; font-size: 18px; font-weight: 700; cursor: pointer; }
     #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 18px; z-index: 30; }
   </style>
 </head>
 <body>
   <div id="hud"><span>Score: <span id="score">0</span></span><span>Coins: <span id="coins">0</span></span></div>
-  <div id="loading">Loading Michelle…</div>
+  <div id="loading">Loading character…</div>
   <div id="game-over"><h1>GAME OVER</h1><p>Score: <span id="final-score">0</span></p><button id="restart">Play Again</button></div>
 
   <script type="importmap">
@@ -32,7 +31,7 @@
     import * as THREE from 'three';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-    // 1. Scene Setup
+    // 1. Scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0b1120);
     scene.fog = new THREE.Fog(0x0b1120, 15, 60);
@@ -49,19 +48,20 @@
     document.body.appendChild(renderer.domElement);
 
     // Lights
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
     keyLight.position.set(5, 10, 5); keyLight.castShadow = true;
-    keyLight.shadow.mapSize.set(1024, 1024); keyLight.shadow.bias = -0.0005;
+    keyLight.shadow.mapSize.set(1024, 1024);
     scene.add(keyLight);
-    const rimLight = new THREE.DirectionalLight(0x7dd3fc, 1.0);
+    const rimLight = new THREE.DirectionalLight(0x7dd3fc, 1.2);
     rimLight.position.set(-5, 4, -8); scene.add(rimLight);
 
     // 2. Ground & Lanes
     const LANE_X = [-2.2, 0, 2.2];
-    const groundGeo = new THREE.PlaneGeometry(7, 300);
-    const groundMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9, metalness: 0.1 });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(7, 300),
+      new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 })
+    );
     ground.rotation.x = -Math.PI / 2; ground.position.z = -140; ground.receiveShadow = true;
     scene.add(ground);
 
@@ -70,58 +70,68 @@
       line.rotation.x = -Math.PI / 2; line.position.set(x, 0.01, -140); scene.add(line);
     }
 
-    // 3. Player (Michelle) & Loader
+    // 3. Player & Model Loading (Open Source URLs)
     const playerGroup = new THREE.Group();
     playerGroup.position.set(LANE_X[1], 0, 0);
     scene.add(playerGroup);
 
-    let mixer = null, playerModel = null, currentAction = null;
+    let mixer = null, playerModel = null;
     const loader = new GLTFLoader();
 
-    // ── IMPORTANT: Model URL ──
-    // Michelle.glb (allowed host) — served via local server to avoid CORS
-    const MODEL_URL = 'https://three.ws/avatars/michelle.glb';
+    // ✅ Official three.js example models — guaranteed CORS-friendly
+    const MODEL_PRIMARY = 'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb';
+    const MODEL_FALLBACK = 'https://three.ws/examples/models/gltf/Soldier.glb'; // Mixamo skeleton
 
     loader.load(
-      MODEL_URL,
-      (gltf) => {
-        playerModel = gltf.scene;
-        // Adjust scale if model appears too small/large
-        playerModel.scale.set(1.0, 1.0, 1.0); // Try 1.5 or 2 if invisible
-        playerModel.position.y = 0; // Ensure feet on ground
-        playerModel.traverse((child) => {
-          if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }
-        });
-        playerGroup.add(playerModel);
-
-        if (gltf.animations.length > 0) {
-          mixer = new THREE.AnimationMixer(playerModel);
-          const clip = gltf.animations[0];
-          currentAction = mixer.clipAction(clip);
-          currentAction.play();
-        }
-        document.getElementById('loading').style.display = 'none';
-      },
+      MODEL_PRIMARY,
+      (gltf) => onModelLoaded(gltf),
       undefined,
       (err) => {
-        console.error('GLB load failed:', err);
-        document.getElementById('loading').textContent = 'Model load failed. Check console (F12) for CORS/404.';
+        console.warn('Primary model failed, trying fallback…', err);
+        loader.load(MODEL_FALLBACK, (gltf) => onModelLoaded(gltf), undefined, (err2) => {
+          console.error('Both models failed:', err2);
+          document.getElementById('loading').textContent = 'Model load failed. See console.';
+        });
       }
     );
 
-    // 4. Game State & Logic (same as before but with minor fixes)
-    const state = { speed: 14, baseSpeed: 14, maxSpeed: 28, score: 0, coins: 0, currentLane: 1, targetX: LANE_X[1], isJumping: false, velocityY: 0, gravity: -32, jumpPower: 9, isSliding: false, slideTimer: 0, slideDuration: 0.6, gameOver: false, startTime: performance.now() };
+    function onModelLoaded(gltf) {
+      playerModel = gltf.scene;
+      playerModel.scale.set(1, 1, 1);
+      playerModel.position.y = 0;
+      playerModel.traverse((child) => {
+        if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }
+      });
+      playerGroup.add(playerModel);
+
+      if (gltf.animations.length > 0) {
+        mixer = new THREE.AnimationMixer(playerModel);
+        // Try to find a run/walk/idle clip; otherwise play first
+        const clip = gltf.animations.find(a => /run|walk|idle/i.test(a.name)) || gltf.animations[0];
+        mixer.clipAction(clip).play();
+      }
+      document.getElementById('loading').style.display = 'none';
+    }
+
+    // 4. Game State
+    const state = {
+      speed: 14, baseSpeed: 14, maxSpeed: 28, score: 0, coins: 0,
+      currentLane: 1, targetX: LANE_X[1],
+      isJumping: false, velocityY: 0, gravity: -32, jumpPower: 9,
+      isSliding: false, slideTimer: 0, slideDuration: 0.6,
+      gameOver: false, startTime: performance.now(),
+    };
+
     const obstacles = [], coins = [];
     const obstacleGeo = new THREE.BoxGeometry(0.9, 1.2, 0.9);
     const obstacleMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0x7f1d1d });
     const coinGeo = new THREE.TorusGeometry(0.22, 0.08, 8, 16);
-    const coinMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, emissive: 0x92400e, metalness: 0.6, roughness: 0.3 });
+    const coinMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, metalness: 0.6, roughness: 0.3 });
 
     function spawnObstacle() {
       const lane = Math.floor(Math.random() * 3);
       const mesh = new THREE.Mesh(obstacleGeo, obstacleMat.clone());
-      mesh.castShadow = true; mesh.receiveShadow = true;
-      mesh.position.set(LANE_X[lane], 0.6, -80);
+      mesh.castShadow = true; mesh.position.set(LANE_X[lane], 0.6, -80);
       scene.add(mesh); obstacles.push(mesh);
     }
     function spawnCoin() {
@@ -133,38 +143,41 @@
 
     let obstacleTimer = 0, coinTimer = 0;
 
-    // Input (Keyboard + Touch) — same as before
-    function moveLane(dir) { if (state.gameOver) return; const newLane = Math.max(0, Math.min(2, state.currentLane + dir)); if (newLane !== state.currentLane) { state.currentLane = newLane; state.targetX = LANE_X[newLane]; } }
+    // Input
+    function moveLane(dir) { if (state.gameOver) return; const nl = Math.max(0, Math.min(2, state.currentLane + dir)); if (nl !== state.currentLane) { state.currentLane = nl; state.targetX = LANE_X[nl]; } }
     function jump() { if (state.gameOver || state.isJumping) return; state.isJumping = true; state.velocityY = state.jumpPower; }
     function slide() { if (state.gameOver || state.isSliding) return; state.isSliding = true; state.slideTimer = state.slideDuration; if (playerModel) playerModel.scale.y = 0.5; }
 
     window.addEventListener('keydown', (e) => {
       if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
-      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') moveLane(-1);
-      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') moveLane(1);
-      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') jump();
-      if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') slide();
+      if (e.key === 'ArrowLeft' || e.key === 'a') moveLane(-1);
+      if (e.key === 'ArrowRight' || e.key === 'd') moveLane(1);
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === ' ') jump();
+      if (e.key === 'ArrowDown' || e.key === 's') slide();
     });
 
     let touchStart = null;
-    window.addEventListener('touchstart', (e) => { touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }, { passive: true });
-    window.addEventListener('touchend', (e) => {
+    window.addEventListener('touchstart', e => { touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }, { passive: true });
+    window.addEventListener('touchend', e => {
       if (!touchStart) return;
-      const dx = e.changedTouches[0].clientX - touchStart.x, dy = e.changedTouches[0].clientY - touchStart.y;
-      const absDx = Math.abs(dx), absDy = Math.abs(dy);
-      if (Math.max(absDx, absDy) < 30) return;
-      if (absDx > absDy) moveLane(dx > 0 ? 1 : -1);
-      else { if (dy < 0) jump(); else slide(); }
+      const dx = e.changedTouches[0].clientX - touchStart.x;
+      const dy = e.changedTouches[0].clientY - touchStart.y;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 30) return;
+      if (Math.abs(dx) > Math.abs(dy)) moveLane(dx > 0 ? 1 : -1);
+      else dy < 0 ? jump() : slide();
       touchStart = null;
     }, { passive: true });
 
     function getPlayerAABB() {
       const w = 0.6, h = state.isSliding ? 0.6 : 1.6, baseY = state.isSliding ? 0.3 : 0.8;
       const y = playerGroup.position.y + baseY;
-      return new THREE.Box3(new THREE.Vector3(playerGroup.position.x - w/2, y - h/2, -0.4), new THREE.Vector3(playerGroup.position.x + w/2, y + h/2, 0.4));
+      return new THREE.Box3(
+        new THREE.Vector3(playerGroup.position.x - w/2, y - h/2, -0.4),
+        new THREE.Vector3(playerGroup.position.x + w/2, y + h/2, 0.4)
+      );
     }
 
-    // 5. Main Loop
+    // 5. Loop
     const clock = new THREE.Clock();
     function animate() {
       requestAnimationFrame(animate);
@@ -199,9 +212,8 @@
       const playerAABB = getPlayerAABB();
       for (let i = obstacles.length - 1; i >= 0; i--) {
         const obs = obstacles[i]; obs.position.z += state.speed * delta;
-        if (obs.position.z > -3 && obs.position.z < 2) {
-          const obsBox = new THREE.Box3().setFromObject(obs);
-          if (playerAABB.intersectsBox(obsBox)) { gameOver(); return; }
+        if (obs.position.z > -3 && obs.position.z < 2 && playerAABB.intersectsBox(new THREE.Box3().setFromObject(obs))) {
+          gameOver(); return;
         }
         if (obs.position.z > 10) { scene.remove(obs); obs.geometry.dispose(); obs.material.dispose(); obstacles.splice(i, 1); }
       }
@@ -209,9 +221,8 @@
       for (let i = coins.length - 1; i >= 0; i--) {
         const coin = coins[i]; coin.position.z += state.speed * delta; coin.rotation.y += delta * 6;
         if (Math.abs(coin.position.z - playerGroup.position.z) < 1.2 && Math.abs(coin.position.x - playerGroup.position.x) < 0.8) {
-          state.coins += 1; document.getElementById('coins').textContent = state.coins;
-          scene.remove(coin); coin.geometry.dispose(); coin.material.dispose(); coins.splice(i, 1);
-          continue;
+          state.coins++; document.getElementById('coins').textContent = state.coins;
+          scene.remove(coin); coin.geometry.dispose(); coin.material.dispose(); coins.splice(i, 1); continue;
         }
         if (coin.position.z > 10) { scene.remove(coin); coin.geometry.dispose(); coin.material.dispose(); coins.splice(i, 1); }
       }
